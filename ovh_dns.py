@@ -41,6 +41,12 @@ EXAMPLES = '''
 
 import os
 
+try:
+    import ovh
+except ImportError:
+    print "failed=True msg='ovh required for this module'"
+    sys.exit(1)
+
 def main():
     module = AnsibleModule(
         argument_spec = dict(
@@ -52,8 +58,15 @@ def main():
         supports_check_mode=True
     )
 
-    module.exit_json(**result)
+    success = module.params['success']
+    text = module.params['name']
+
+    if success:
+        module.exit_json(msg=text)
+    else:
+        module.fail_json(msg=text)
 
 # import module snippets
 from ansible.module_utils.basic import *
+
 main()
