@@ -25,6 +25,7 @@ author: Carlos Izquierdo
 short_description: Manage OVH DNS records
 description:
     - Manage OVH (French European hosting provider) DNS records
+requirements: [ "ovh" ]
 options:
     domain:
         required: true
@@ -35,20 +36,31 @@ options:
         description:
             - Name of the DNS record
     value:
-        required: false
+        required: true
         description:
             - Value of the DNS record (i.e. what it points to)
     type:
         required: false
+        default: A
         description:
             - Type of DNS record (A, AAAA, PTR, CNAME, etc.)
     state:
         required: false
+        default: present
+        choices: ['present', 'absent']
         description:
             - Determines wether the record is to be created/modified or deleted
 '''
 
 EXAMPLES = '''
+# Create a typical A record
+- ovh_dns: state=present domain=mydomain.com name=db1 value=10.10.10.10
+
+# Create a CNAME record
+- ovh_dns: state=present domain=mydomain.com name=dbprod type=cname value=db1
+
+# Delete an existing record, must specify all parameters
+- ovh_dns: state=absent domain=mydomain.com name=dbprod type=cname value=db1
 '''
 
 import os
@@ -62,13 +74,12 @@ except ImportError:
 def main():
     module = AnsibleModule(
         argument_spec = dict(
-            domain = dict(required=True, type='str'),
-            name = dict(required=True, type='str'),
-            value = dict(required=True, type='str'),
-            type = dict(default='A', type='str'),
-            state = dict(default='present', choices=['present', 'absent'], type='str'),
-        ),
-        supports_check_mode=True
+            domain = dict(required=True),
+            name = dict(required=True),
+            value = dict(default=None),
+            type = dict(default='A'),
+            state = dict(default='present', choices=['present', 'absent']),
+        )
     )
 
     success = module.params['success']
