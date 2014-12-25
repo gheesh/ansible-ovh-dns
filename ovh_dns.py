@@ -30,10 +30,22 @@ options:
         required: true
         description:
             - Name of the domain zone.
-    record:
+    name:
         required: true
         description:
-            - Name of the DNS entry
+            - Name of the DNS record
+    value:
+        required: false
+        description:
+            - Value of the DNS record (i.e. what it points to)
+    type:
+        required: false
+        description:
+            - Type of DNS record (A, AAAA, PTR, CNAME, etc.)
+    state:
+        required: false
+        description:
+            - Determines wether the record is to be created/modified or deleted
 '''
 
 EXAMPLES = '''
@@ -50,10 +62,11 @@ except ImportError:
 def main():
     module = AnsibleModule(
         argument_spec = dict(
-            state=dict(default='present', choices=['present', 'absent'], type='str'),
-            name=dict(required=True, aliases=['user'], type='str'),
-            uid=dict(default=None, type='str'),
-            non_unique=dict(default='no', type='bool'),
+            domain = dict(required=True, type='str'),
+            name = dict(required=True, type='str'),
+            value = dict(required=True, type='str'),
+            type = dict(default='A', type='str'),
+            state = dict(default='present', choices=['present', 'absent'], type='str'),
         ),
         supports_check_mode=True
     )
