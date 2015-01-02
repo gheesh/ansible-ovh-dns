@@ -30,7 +30,7 @@ options:
     domain:
         required: true
         description:
-            - Name of the domain zone.
+            - Name of the domain zone
     name:
         required: true
         description:
@@ -71,24 +71,96 @@ except ImportError:
     print "failed=True msg='ovh required for this module'"
     sys.exit(1)
 
+
+# TODO: Try to automate this in case the supplied credentials are not valid
+def get_credentials():
+    """This function is used to obtain an authentication token.
+    It should only be called once."""
+    client = ovh.Client()
+    access_rules = [
+        {'method': 'GET', 'path': '/domain/*'},
+        {'method': 'PUT', 'path': '/domain/*'},
+        {'method': 'POST', 'path': '/domain/*'},
+        {'method': 'DELETE', 'path': '/domain/*'},
+    ]
+    validation = client.request_consumerkey(access_rules)
+    print("Your consumer key is {}".format(validation['consumerKey']))
+    print("Please visit {} to validate".format(validation['validationUrl']))
+
+
+def get_domain_records(client, domain):
+    """Obtain all records for a specific domain"""
+    records = {}
+
+    # List all ids and then get info for each one
+    record_ids = client.get('/domain/zone/{}/record'.format(domain))
+    for record_id in record_ids:
+        info = client.get('/domain/zone/{}/record/{}'.format(domain, record_id))
+        # TODO: Cannot aggregate based only on name, must use record type and target as well
+        records[info['subDomain']] = info
+
+    return records
+
+
 def main():
     module = AnsibleModule(
         argument_spec = dict(
             domain = dict(required=True),
             name = dict(required=True),
-            value = dict(default=None),
+            value = dict(default=''),
             type = dict(default='A'),
             state = dict(default='present', choices=['present', 'absent']),
         )
     )
 
-    success = module.params['success']
-    text = module.params['name']
+    # Get parameters
+    domain = module.params.get('domain')
+    name   = module.params.get('name')
+    state  = module.params.get('state')
 
-    if success:
-        module.exit_json(msg=text)
-    else:
-        module.fail_json(msg=text)
+    # Connect to OVH API
+    client = ovh.Client()
+
+    # Check that the domain exists
+    domains = client.get('/domain/zone')
+    if not domain in domains:
+        module.fail_json(msg='Domain {} does not exist'.format(domain))
+
+    # Obtain all domain records to check status against what is demanded
+    records = get_domain_records(client, domain)
+
+    # Remove a record
+    if state == 'absent':
+        # Are we done yet?
+        if name not in records:
+            module.exit_json(changed=False)
+
+        # Remove the record
+        # TODO: Should check parameters
+        client.delete('/domain/zone/{}/record/{}'.format(domain, records[name]['id']))
+        module.exit_json(changed=True)
+
+    # Add a record
+    # TODO: Allow modifications
+    if state == 'present':
+        fieldtype = module.params.get('type')
+        targetval = module.params.get('value')
+
+        # Since we are inserting a record, we need a target
+        if targetval == '':
+            module.fail_json(msg='Did not specify a value')
+
+        # Does the record exist already?
+        if name in records and records[name]['fieldType'] == fieldtype and records[name]['target'] == targetval:
+            module.exit_json(changed=False)
+
+        # Add the record
+        client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval)
+        module.exit_json(changed=True)
+
+    # We should never reach here
+    module.fail_json(msg='Internal ovh_dns module error')
+
 
 # import module snippets
 from ansible.module_utils.basic import *
