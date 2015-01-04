@@ -31,5 +31,5 @@ Parameter | Required | Default | Choices        | Comments
 domain    | yes      |         |                | Name of the domain zone
 name      | yes      |         |                | Name of the DNS record
 value     | no       |         |                | Value of the DNS record (i.e. what it points to)
-type      | no       | A       |                | Type of DNS record (A, AAAA, PTR, CNAME, etc.)
+type      | no       | A       | See comments   | Type of DNS record (A, AAAA, CNAME, DKIM, LOC, MX, NAPTR, NS, PTR, SPF, SRV, SSHFP, TXT)
 state     | no       | present | present,absent | Determines wether the record is to be created/modified or deleted

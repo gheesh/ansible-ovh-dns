@@ -42,6 +42,7 @@ options:
     type:
         required: false
         default: A
+        choices: ['A', 'AAAA', 'CNAME', 'DKIM', 'LOC', 'MX', 'NAPTR', 'NS', 'PTR', 'SPF', 'SRV', 'SSHFP', 'TXT']
         description:
             - Type of DNS record (A, AAAA, PTR, CNAME, etc.)
     state:
@@ -108,7 +109,7 @@ def main():
             domain = dict(required=True),
             name = dict(required=True),
             value = dict(default=''),
-            type = dict(default='A'),
+            type = dict(default='A', choices=['A', 'AAAA', 'CNAME', 'DKIM', 'LOC', 'MX', 'NAPTR', 'NS', 'PTR', 'SPF', 'SRV', 'SSHFP', 'TXT']),
             state = dict(default='present', choices=['present', 'absent']),
         )
     )
@@ -132,16 +133,17 @@ def main():
     # Remove a record
     if state == 'absent':
         # Are we done yet?
+        #if name not in records or records[name]['fieldType'] != fieldtype or records[name]['target'] != targetval:
         if name not in records:
             module.exit_json(changed=False)
 
         # Remove the record
-        # TODO: Should check parameters
+        # TODO: Must check parameters
         client.delete('/domain/zone/{}/record/{}'.format(domain, records[name]['id']))
+        client.post('/domain/zone/{}/refresh'.format(domain))
         module.exit_json(changed=True)
 
-    # Add a record
-    # TODO: Allow modifications
+    # Add / modify a record
     if state == 'present':
         fieldtype = module.params.get('type')
         targetval = module.params.get('value')
@@ -151,11 +153,22 @@ def main():
             module.fail_json(msg='Did not specify a value')
 
         # Does the record exist already?
-        if name in records and records[name]['fieldType'] == fieldtype and records[name]['target'] == targetval:
-            module.exit_json(changed=False)
+        if name in records:
+            if records[name]['fieldType'] == fieldtype and records[name]['target'] == targetval:
+                # The record is already as requested, no need to change anything
+                module.exit_json(changed=False)
+
+            # Delete and re-create the record
+            client.delete('/domain/zone/{}/record/{}'.format(domain, records[name]['id']))
+            client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval)
+
+            # Refresh the zone and exit
+            client.post('/domain/zone/{}/refresh'.format(domain))
+            module.exit_json(changed=True)
 
         # Add the record
         client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval)
+        client.post('/domain/zone/{}/refresh'.format(domain))
         module.exit_json(changed=True)
 
     # We should never reach here
