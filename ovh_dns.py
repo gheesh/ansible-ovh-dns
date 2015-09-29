@@ -65,6 +65,7 @@ EXAMPLES = '''
 '''
 
 import os
+import sys
 
 try:
     import ovh
