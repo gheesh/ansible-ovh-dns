@@ -44,6 +44,7 @@ You'll need a valid OVH application key to use this module. If you don't have on
     OVH_CONSUMER_KEY=GENERATED_CONSUMER_KEY
     ```
 
+#Managing DNS records
 ## Usage
 
 Create a typical A record:
@@ -58,7 +59,7 @@ Delete an existing record, must specify all parameters:
 
     - ovh_dns: state=absent domain=mydomain.com name=dbprod type=cname value=db1
 
-# Parameters
+## Parameters
 
 Parameter | Required | Default | Choices        | Comments
 :---------|----------|---------|----------------|:-----------------------
@@ -67,3 +68,28 @@ name      | yes      |         |                | Name of the DNS record
 value     | no       |         |                | Value of the DNS record (i.e. what it points to)
 type      | no       | A       | See comments   | Type of DNS record (A, AAAA, CNAME, DKIM, LOC, MX, NAPTR, NS, PTR, SPF, SRV, SSHFP, TXT)
 state     | no       | present | present,absent | Determines wether the record is to be created/modified or deleted
+
+
+#Manager Load Balancer IP
+## Usage
+
+Adds or Update an ip to a Load Balancer:
+
+    - ovh_ip_loadbalancer name=ip-1.1.1.1 ip=212.1.1.1 state=present probe=none weight=8 endpoint=ovh-eu application_key=yourkey application_secret=yoursecret consumer_key=yourconsumerkey
+
+Removes an an ip from a Load Balancer:
+
+    - ovh_ip_loadbalancer name=ip-1.1.1.1 ip=212.1.1.1 state=absent endpoint=ovh-eu application_key=yourkey application_secret=yoursecret consumer_key=yourconsumerkey
+
+## Parameters
+
+Parameter 			| Required | Default | Choices        | Comments
+:-------------------|----------|---------|----------------|:-----------------------
+name				| yes      |         |                | Name of load balancer to update
+ip        			| yes      |         |                | Name of the backend IP to manager
+probe     			| no       |         |                | Value of the probe parameter of the backend (none http icmp oco)
+weight          	| no       |         |                | Value of the weight parameter ( a number between 1 and 100 )
+endpoint       		| yes      |         |                | The endpoint to use  for OVH api
+application_key 	| yes      |         | See comments   | The application key to use for OVH api
+application_secret	| yes      |         | See comments   | The application secret to use for OVH api
+state		   		| yes      | present | present,absent | Determines wether the IP backend is to be created/modified or deleted
