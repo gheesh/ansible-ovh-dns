@@ -90,6 +90,7 @@ ip        			| yes      |         |                | Name of the backend IP to m
 probe     			| no       |         |                | Value of the probe parameter of the backend (none http icmp oco)
 weight          	| no       |         |                | Value of the weight parameter ( a number between 1 and 100 )
 endpoint       		| yes      |         |                | The endpoint to use  for OVH api
-application_key 	| yes      |         | See comments   | The application key to use for OVH api
-application_secret	| yes      |         | See comments   | The application secret to use for OVH api
+application_key 	| yes      |         | 				  | The application key to use for OVH api
+application_secret	| yes      |         |				  | The application secret to use for OVH api
+consumer_key		| yes      |         |  		      | The consumer key to use for OVH api
 state		   		| yes      | present | present,absent | Determines wether the IP backend is to be created/modified or deleted
