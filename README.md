@@ -70,7 +70,6 @@ type      | no       | A       | See comments   | Type of DNS record (A, AAAA, C
 state     | no       | present | present,absent | Determines wether the record is to be created/modified or deleted
 
 
-
 #Manager Load Balancer IP
 ## Usage
 
