@@ -70,7 +70,7 @@ import sys
 try:
     import ovh
 except ImportError:
-    print "failed=True msg='ovh required for this module'"
+    print("failed=True msg='ovh required for this module'")
     sys.exit(1)
 
 
