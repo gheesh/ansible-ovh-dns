@@ -114,7 +114,8 @@ def main():
             value = dict(default=''),
             type = dict(default='A', choices=['A', 'AAAA', 'CNAME', 'DKIM', 'LOC', 'MX', 'NAPTR', 'NS', 'PTR', 'SPF', 'SRV', 'SSHFP', 'TXT']),
             state = dict(default='present', choices=['present', 'absent']),
-        )
+        ),
+        supports_check_mode = True
     )
 
     # Get parameters
@@ -140,10 +141,11 @@ def main():
         if name not in records:
             module.exit_json(changed=False)
 
-        # Remove the record
-        # TODO: Must check parameters
-        client.delete('/domain/zone/{}/record/{}'.format(domain, records[name]['id']))
-        client.post('/domain/zone/{}/refresh'.format(domain))
+        if not module.check_mode:
+            # Remove the record
+            # TODO: Must check parameters
+            client.delete('/domain/zone/{}/record/{}'.format(domain, records[name]['id']))
+            client.post('/domain/zone/{}/refresh'.format(domain))
         module.exit_json(changed=True)
 
     # Add / modify a record
@@ -162,16 +164,18 @@ def main():
                 module.exit_json(changed=False)
 
             # Delete and re-create the record
-            client.delete('/domain/zone/{}/record/{}'.format(domain, records[name]['id']))
-            client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval)
+            if not module.check_mode:
+                client.delete('/domain/zone/{}/record/{}'.format(domain, records[name]['id']))
+                client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval)
 
-            # Refresh the zone and exit
-            client.post('/domain/zone/{}/refresh'.format(domain))
+                # Refresh the zone and exit
+                client.post('/domain/zone/{}/refresh'.format(domain))
             module.exit_json(changed=True)
 
-        # Add the record
-        client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval)
-        client.post('/domain/zone/{}/refresh'.format(domain))
+        if not module.check_mode:
+            # Add the record
+            client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval)
+            client.post('/domain/zone/{}/refresh'.format(domain))
         module.exit_json(changed=True)
 
     # We should never reach here
