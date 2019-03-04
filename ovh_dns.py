@@ -58,17 +58,20 @@ options:
 '''
 
 EXAMPLES = '''
-# Create a typical A record
-- ovh_dns: state=present domain=mydomain.com name=db1 value=10.10.10.10
+# Create an A record
+- ovh_dns: state=present domain=mydomain.com name=db1 type=A value=10.10.10.10
 
 # Create a CNAME record
-- ovh_dns: state=present domain=mydomain.com name=dbprod type=cname value=db1
+- ovh_dns: state=present domain=mydomain.com name=dbprod type=CNAME value=db1
 
 # Delete an existing record, must specify all parameters
-- ovh_dns: state=absent domain=mydomain.com name=dbprod type=cname value=db1
+- ovh_dns: state=absent domain=mydomain.com name=dbprod type=CNAME value=db1
 
 # Remove all dns records
 - ovh_dns: state=absent domain=mydomain.com name="*"
+
+# Remove all type=A records
+- ovh_dns: state=absent domain=mydomain.com name="*" type=A
 '''
 
 RETURN = '''
@@ -129,7 +132,7 @@ def main():
             domain = dict(required=True),
             name = dict(default=''),
             value = dict(default=''),
-            type = dict(default='A', choices=['A', 'AAAA', 'CNAME', 'DKIM', 'LOC', 'MX', 'NAPTR', 'NS', 'PTR', 'SPF', 'SRV', 'SSHFP', 'TXT']),
+            type = dict(default='', choices=['A', 'AAAA', 'CNAME', 'DKIM', 'LOC', 'MX', 'NAPTR', 'NS', 'PTR', 'SPF', 'SRV', 'SSHFP', 'TXT']),
             state = dict(default='present', choices=['present', 'absent']),
         ),
         supports_check_mode = True
@@ -169,7 +172,7 @@ def main():
         if not module.check_mode:
             if not current_record and name == "*":
                 for record in records:
-                    if record['fieldType'] != 'NS':
+                    if record['fieldType'] != 'NS' and (fieldtype = '' or record['fieldtype'] == fieldtype):
                         response.append(client.delete('/domain/zone/{}/record/{}'.format(domain, record['id'])))
                         result['changed'] = True
             else:
@@ -199,6 +202,13 @@ def main():
             result['changed'] = True
             result['message'] = json.dumps(response)
             module.exit_json(**result)
+
+    if state == 'update':
+        # Since we are updating a record, we need a target
+        if targetval == '':
+            module.fail_json(msg='Did not specify a value', **result)
+
+
 
     # We should never reach here
     module.fail_json(msg='Internal ovh_dns module error')

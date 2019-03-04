@@ -65,6 +65,9 @@ Delete an existing record, must specify all parameters:
 Delete all records in zone (except NS as these are required for correct domain operation):
     - ovh_dns: state=absent domain=mydomain.com name="*"
 
+Delete all records in zone by type=A (except NS as these are required for correct domain operation):
+    - ovh_dns: state=absent domain=mydomain.com name="*" type=A
+
 # Parameters
 
 Parameter | Required | Default | Choices        | Comments
@@ -72,5 +75,5 @@ Parameter | Required | Default | Choices        | Comments
 domain    | yes      |         |                | Name of the domain zone
 name      | yes      |         |                | Name of the DNS record
 value     | no       |         |                | Value of the DNS record (i.e. what it points to)
-type      | no       | A       | See comments   | Type of DNS record (A, AAAA, CNAME, DKIM, LOC, MX, NAPTR, NS, PTR, SPF, SRV, SSHFP, TXT)
+type      | no       |         | See comments   | Type of DNS record (A, AAAA, CNAME, DKIM, LOC, MX, NAPTR, NS, PTR, SPF, SRV, SSHFP, TXT)
 state     | no       | present | present,absent | Determines wether the record is to be created/modified or deleted
