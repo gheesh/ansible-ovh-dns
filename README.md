@@ -52,11 +52,18 @@ Create a typical A record:
 
 Create a CNAME record:
 
-    - ovh_dns: state=present domain=mydomain.com name=dbprod type=cname value=db1
+    - ovh_dns: state=present domain=mydomain.com name=dbprod type=CNAME value=db1
+
+Create a MX record for main domain (value must be in format: "priority target"):
+
+    - ovh_dns: state=present domain=mydomain.com name="" type=MX value="10 mx.mydomain.com."
 
 Delete an existing record, must specify all parameters:
 
-    - ovh_dns: state=absent domain=mydomain.com name=dbprod type=cname value=db1
+    - ovh_dns: state=absent domain=mydomain.com name=dbprod type=CNAME value=db1
+
+Delete all records in zone (except NS as these are required for correct domain operation):
+    - ovh_dns: state=absent domain=mydomain.com name="*"
 
 # Parameters
 

@@ -23,7 +23,9 @@ from __future__ import print_function
 DOCUMENTATION = '''
 ---
 module: ovh_dns
-author: Carlos Izquierdo
+author: 
+    - Carlos Izquierdo 
+    - Marcin Jaworski (hemi@hemical.pl)
 short_description: Manage OVH DNS records
 description:
     - Manage OVH (French European hosting provider) DNS records
@@ -38,7 +40,7 @@ options:
         description:
             - Name of the DNS record
     value:
-        required: true
+        required: false
         description:
             - Value of the DNS record (i.e. what it points to)
     type:
@@ -64,20 +66,33 @@ EXAMPLES = '''
 
 # Delete an existing record, must specify all parameters
 - ovh_dns: state=absent domain=mydomain.com name=dbprod type=cname value=db1
+
+# Remove all dns records
+- ovh_dns: state=absent domain=mydomain.com name="*"
+'''
+
+RETURN = '''
+original_message:
+    description: The original name param that was passed in
+    type: str
+message:
+    description: The output message that the module generates
 '''
 
 import os
 import sys
+import json
+from ansible.module_utils.basic import AnsibleModule
 
 try:
     import ovh
-except ImportError:
-    print("failed=True msg='ovh required for this module'")
-    sys.exit(1)
+    HAS_OVH_LIB=True
+except:
+    HAS_OVH_LIB=False
 
 
 # TODO: Try to automate this in case the supplied credentials are not valid
-def get_credentials():
+def get_credentialsu():
     """This function is used to obtain an authentication token.
     It should only be called once."""
     client = ovh.Client()
@@ -91,37 +106,51 @@ def get_credentials():
     print("Your consumer key is {}".format(validation['consumerKey']))
     print("Please visit {} to validate".format(validation['validationUrl']))
 
-
 def get_domain_records(client, domain):
     """Obtain all records for a specific domain"""
-    records = {}
+    records = []
 
     # List all ids and then get info for each one
     record_ids = client.get('/domain/zone/{}/record'.format(domain))
     for record_id in record_ids:
         info = client.get('/domain/zone/{}/record/{}'.format(domain, record_id))
-        # TODO: Cannot aggregate based only on name, must use record type and target as well
-        records[info['subDomain']] = info
-
+        records.append(info)
     return records
 
+def check_record(records, subdomain, fieldType, target):
+    for record in records:
+        if record['subDomain'] == subdomain and record['fieldType'] == fieldType and record['target'] == target:
+            return record['id']
+        return False
 
 def main():
     module = AnsibleModule(
         argument_spec = dict(
             domain = dict(required=True),
-            name = dict(required=True),
+            name = dict(default=''),
             value = dict(default=''),
             type = dict(default='A', choices=['A', 'AAAA', 'CNAME', 'DKIM', 'LOC', 'MX', 'NAPTR', 'NS', 'PTR', 'SPF', 'SRV', 'SSHFP', 'TXT']),
             state = dict(default='present', choices=['present', 'absent']),
         ),
         supports_check_mode = True
     )
+    if not HAS_OVH_LIB:
+        module.fail_json(msg='The "ovh" Python module is required')
+
+    result = dict(
+        changed=False,
+        original_message='',
+        message=''
+    )
+
+    result['original_message'] = module.params['name']
 
     # Get parameters
     domain = module.params.get('domain')
     name   = module.params.get('name')
     state  = module.params.get('state')
+    fieldtype = module.params.get('type')
+    targetval = module.params.get('value')
 
     # Connect to OVH API
     client = ovh.Client()
@@ -129,60 +158,51 @@ def main():
     # Check that the domain exists
     domains = client.get('/domain/zone')
     if not domain in domains:
-        module.fail_json(msg='Domain {} does not exist'.format(domain))
+        module.fail_json(msg='Domain {} does not exist'.format(domain), **result)
 
     # Obtain all domain records to check status against what is demanded
     records = get_domain_records(client, domain)
-
+    current_record = check_record(records,name,fieldtype,targetval)
+    response = [] 
     # Remove a record
     if state == 'absent':
-        # Are we done yet?
-        #if name not in records or records[name]['fieldType'] != fieldtype or records[name]['target'] != targetval:
-        if name not in records:
-            module.exit_json(changed=False)
-
         if not module.check_mode:
-            # Remove the record
-            # TODO: Must check parameters
-            client.delete('/domain/zone/{}/record/{}'.format(domain, records[name]['id']))
-            client.post('/domain/zone/{}/refresh'.format(domain))
-        module.exit_json(changed=True)
+            if not current_record and name == "*":
+                for record in records:
+                    if record['fieldType'] != 'NS':
+                        response.append(client.delete('/domain/zone/{}/record/{}'.format(domain, record['id'])))
+                        result['changed'] = True
+            else:
+                response.append(client.delete('/domain/zone/{}/record/{}'.format(domain, current_record)))
+                response.append(client.post('/domain/zone/{}/refresh'.format(domain)))
+                result['changed'] = True
+
+            result['message'] = json.dumps(response)
+            module.exit_json(**result)
 
     # Add / modify a record
     if state == 'present':
-        fieldtype = module.params.get('type')
-        targetval = module.params.get('value')
 
         # Since we are inserting a record, we need a target
         if targetval == '':
-            module.fail_json(msg='Did not specify a value')
+            module.fail_json(msg='Did not specify a value', **result)
 
-        # Does the record exist already?
-        if name in records:
-            if records[name]['fieldType'] == fieldtype and records[name]['target'] == targetval:
-                # The record is already as requested, no need to change anything
-                module.exit_json(changed=False)
-
-            # Delete and re-create the record
-            if not module.check_mode:
-                client.delete('/domain/zone/{}/record/{}'.format(domain, records[name]['id']))
-                client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval)
-
-                # Refresh the zone and exit
-                client.post('/domain/zone/{}/refresh'.format(domain))
-            module.exit_json(changed=True)
+        if current_record:
+            # The record is already as requested, no need to change anything
+            module.exit_json(**result)
 
         if not module.check_mode:
-            # Add the record
-            client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval)
-            client.post('/domain/zone/{}/refresh'.format(domain))
-        module.exit_json(changed=True)
+            # Create record
+            response.append(client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval))
+            # Refresh the zone and exit
+            response.append(client.post('/domain/zone/{}/refresh'.format(domain)))
+            result['changed'] = True
+            result['message'] = json.dumps(response)
+            module.exit_json(**result)
 
     # We should never reach here
     module.fail_json(msg='Internal ovh_dns module error')
 
 
-# import module snippets
-from ansible.module_utils.basic import *
-
-main()
+if __name__ == '__main__':
+    main()
