@@ -102,7 +102,7 @@ except:
 
 
 # TODO: Try to automate this in case the supplied credentials are not valid
-def get_credentialsu():
+def get_credentials():
     """This function is used to obtain an authentication token.
     It should only be called once."""
     client = ovh.Client()
