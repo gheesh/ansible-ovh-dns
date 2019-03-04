@@ -43,6 +43,10 @@ options:
         required: false
         description:
             - Value of the DNS record (i.e. what it points to)
+    old_value:
+        required: false
+        description:
+            - Old value of the DNS record which we want to update
     type:
         required: false
         default: A
@@ -63,6 +67,9 @@ EXAMPLES = '''
 
 # Create a CNAME record
 - ovh_dns: state=present domain=mydomain.com name=dbprod type=CNAME value=db1
+
+# Update a CNAME record
+- ovh_dns: state=present domain=mydomain.com name=dbprod type=CNAME value=db1 old_value=db1old
 
 # Delete an existing record, must specify all parameters
 - ovh_dns: state=absent domain=mydomain.com name=dbprod type=CNAME value=db1
@@ -132,6 +139,7 @@ def main():
             domain = dict(required=True),
             name = dict(default=''),
             value = dict(default=''),
+            old_value = dict(default=''),
             type = dict(default='', choices=['A', 'AAAA', 'CNAME', 'DKIM', 'LOC', 'MX', 'NAPTR', 'NS', 'PTR', 'SPF', 'SRV', 'SSHFP', 'TXT']),
             state = dict(default='present', choices=['present', 'absent']),
         ),
@@ -154,6 +162,7 @@ def main():
     state  = module.params.get('state')
     fieldtype = module.params.get('type')
     targetval = module.params.get('value')
+    old_targetval = module.params.get('old_value')
 
     # Connect to OVH API
     client = ovh.Client()
@@ -166,6 +175,7 @@ def main():
     # Obtain all domain records to check status against what is demanded
     records = get_domain_records(client, domain)
     current_record = check_record(records,name,fieldtype,targetval)
+    old_record = check_record(records,name,fieldtype,old_targetval)
     response = [] 
     # Remove a record
     if state == 'absent':
@@ -195,8 +205,12 @@ def main():
             module.exit_json(**result)
 
         if not module.check_mode:
-            # Create record
-            response.append(client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval))
+            if old_record:
+                # Update record
+                response.append(client.put('/domain/zone/{}/record/{}'.format(domain, old_record), target=targetval))
+            else:
+                # Create record
+                response.append(client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval))
             # Refresh the zone and exit
             response.append(client.post('/domain/zone/{}/refresh'.format(domain)))
             result['changed'] = True

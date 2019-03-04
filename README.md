@@ -54,6 +54,10 @@ Create a CNAME record:
 
     - ovh_dns: state=present domain=mydomain.com name=dbprod type=CNAME value=db1
 
+Update a CNAME record:
+
+    - ovh_dns: state=present domain=mydomain.com name=dbprod type=CNAME value=db1 old_value=db1old
+
 Create a MX record for main domain (value must be in format: "priority target"):
 
     - ovh_dns: state=present domain=mydomain.com name="" type=MX value="10 mx.mydomain.com."
@@ -75,5 +79,6 @@ Parameter | Required | Default | Choices        | Comments
 domain    | yes      |         |                | Name of the domain zone
 name      | yes      |         |                | Name of the DNS record
 value     | no       |         |                | Value of the DNS record (i.e. what it points to)
+old_value | no       |         |                | Old value of the DNS record which we want to update
 type      | no       |         | See comments   | Type of DNS record (A, AAAA, CNAME, DKIM, LOC, MX, NAPTR, NS, PTR, SPF, SRV, SSHFP, TXT)
 state     | no       | present | present,absent | Determines wether the record is to be created/modified or deleted
