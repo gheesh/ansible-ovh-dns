@@ -43,8 +43,7 @@ options:
             - Value of the DNS record (i.e. what it points to)
     type:
         required: false
-        default: A
-        choices: ['A', 'AAAA', 'CNAME', 'DKIM', 'LOC', 'MX', 'NAPTR', 'NS', 'PTR', 'SPF', 'SRV', 'SSHFP', 'TXT']
+        choices: ['A', 'AAAA', 'CAA', 'CNAME', 'DKIM', 'LOC', 'MX', 'NAPTR', 'NS', 'PTR', 'SPF', 'SRV', 'SSHFP', 'TLSA', 'TXT']
         description:
             - Type of DNS record (A, AAAA, PTR, CNAME, etc.)
     state:
@@ -112,8 +111,8 @@ def main():
             domain = dict(required=True),
             name = dict(required=True),
             value = dict(default=''),
-            type = dict(default='A', choices=['A', 'AAAA', 'CNAME', 'DKIM', 'LOC', 'MX', 'NAPTR', 'NS', 'PTR', 'SPF', 'SRV', 'SSHFP', 'TXT']),
             state = dict(default='present', choices=['present', 'absent']),
+            type = dict(default=None, choices=['A', 'AAAA', 'CNAME', 'CAA', 'DKIM', 'LOC', 'MX', 'NAPTR', 'NS', 'PTR', 'SPF', 'SRV', 'SSHFP', 'TXT', 'TLSA']),
         ),
         supports_check_mode = True
     )
