@@ -50,20 +50,37 @@ Create a typical A record:
 
     - ovh_dns: state=present domain=mydomain.com name=db1 value=10.10.10.10
 
+Replace a typical A record if as multi record found with different target/value:
+
+    - ovh_dns: state=present domain=mydomain.com name=db1 value=10.20.20.20 replace=10.10.10.10
+
 Create a CNAME record:
 
     - ovh_dns: state=present domain=mydomain.com name=dbprod type=cname value=db1
 
-Delete an existing record, must specify all parameters:
+Append a CNAME record:
+
+    - ovh_dns: state=append domain=mydomain.com name=dbprod type=cname value=db2
+
+Delete an existing record, specific record:
 
     - ovh_dns: state=absent domain=mydomain.com name=dbprod type=cname value=db1
 
+Delete an existing record, all record same type:
+
+    - ovh_dns: state=absent domain=mydomain.com name=dbprod type=cname
+
+Delete an existing record, all record same name:
+
+    - ovh_dns: state=absent domain=mydomain.com name=dbprod
+
 # Parameters
 
-Parameter | Required | Default | Choices        | Comments
-:---------|----------|---------|----------------|:-----------------------
-domain    | yes      |         |                | Name of the domain zone
-name      | yes      |         |                | Name of the DNS record
-value     | no       |         |                | Value of the DNS record (i.e. what it points to)
-type      | no       | A       | See comments   | Type of DNS record (A, AAAA, CNAME, DKIM, LOC, MX, NAPTR, NS, PTR, SPF, SRV, SSHFP, TXT)
-state     | no       | present | present,absent | Determines wether the record is to be created/modified or deleted
+Parameter | Required | Default | Choices               | Comments
+:---------|----------|---------|-----------------------|:-----------------------
+domain    | yes      |         |                       | Name of the domain zone
+name      | yes      |         |                       | Name of the DNS record
+value     | no       |         |                       | Value of the DNS record (i.e. what it points to)
+type      | no       |         | See comments          | Type of DNS record (A, AAAA, CAA, CNAME, DKIM, LOC, MX, NAPTR, NS, PTR, SPF, SRV, SSHFP, TLSA, TXT)
+state     | no       | present | present,absent,append | Determines wether the record is to be created/modified or deleted
+replace   | no       |         |                       | Old value of the DNS record (i.e. what it points to now)
