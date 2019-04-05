@@ -38,18 +38,22 @@ options:
         description:
             - Name of the DNS record
     value:
-        required: true
+        required: true if present/append
         description:
             - Value of the DNS record (i.e. what it points to)
+            - If None with 'present' then deletes ALL records at 'name'
+    replace:
+        required: true if present and multi records found
+            - Old value of the DNS record (i.e. what it points to now)
     type:
-        required: false
+        required: true if present/append
         choices: ['A', 'AAAA', 'CAA', 'CNAME', 'DKIM', 'LOC', 'MX', 'NAPTR', 'NS', 'PTR', 'SPF', 'SRV', 'SSHFP', 'TLSA', 'TXT']
         description:
             - Type of DNS record (A, AAAA, PTR, CNAME, etc.)
     state:
         required: false
         default: present
-        choices: ['present', 'absent']
+        choices: ['present', 'absent', 'append']
         description:
             - Determines wether the record is to be created/modified or deleted
 '''
@@ -87,40 +91,68 @@ def get_credentials():
         {'method': 'DELETE', 'path': '/domain/*'},
     ]
     validation = client.request_consumerkey(access_rules)
-    print("Your consumer key is {}".format(validation['consumerKey']))
-    print("Please visit {} to validate".format(validation['validationUrl']))
+    # print("Your consumer key is {}".format(validation['consumerKey']))
+    # print("Please visit {} to validate".format(validation['validationUrl']))
+    return validation['consumerKey']
 
-
-def get_domain_records(client, domain):
+def get_domain_records(client, domain, fieldtype=None, subDomain=None):
     """Obtain all records for a specific domain"""
     records = {}
 
+    params = {
+        'subDomain': subDomain,
+        'fieldType': fieldtype,
+    }
+
     # List all ids and then get info for each one
-    record_ids = client.get('/domain/zone/{}/record'.format(domain))
+    if not subDomain:
+        params.pop('subDomain')
+    if not fieldtype:
+        params.pop('fieldType')
+
+    record_ids = client.get('/domain/zone/{}/record'.format(domain),
+                            **params)
     for record_id in record_ids:
         info = client.get('/domain/zone/{}/record/{}'.format(domain, record_id))
-        # TODO: Cannot aggregate based only on name, must use record type and target as well
-        records[info['subDomain']] = info
+        records[record_id] = info
 
     return records
 
+def count_type(records, fieldtype=['A', 'AAAA']):
+    i = 0
+    for id in records:
+        if records[id]['fieldType'] in fieldtype:
+            i+=1
+    return i
 
 def main():
     module = AnsibleModule(
         argument_spec = dict(
             domain = dict(required=True),
             name = dict(required=True),
-            value = dict(default=''),
-            state = dict(default='present', choices=['present', 'absent']),
+            state = dict(default='present', choices=['present', 'absent', 'append']),
             type = dict(default=None, choices=['A', 'AAAA', 'CNAME', 'CAA', 'DKIM', 'LOC', 'MX', 'NAPTR', 'NS', 'PTR', 'SPF', 'SRV', 'SSHFP', 'TXT', 'TLSA']),
+            replace = dict(default=None),
+            value = dict(default=None),
         ),
         supports_check_mode = True
     )
+    results = dict(
+        changed=False,
+        msg='',
+        records='',
+        response='',
+        original_message=module.params['name'],
+    )
+    response = []
 
     # Get parameters
     domain = module.params.get('domain')
     name   = module.params.get('name')
     state  = module.params.get('state')
+    fieldtype = module.params.get('type')
+    targetval = module.params.get('value')
+    oldtargetval = module.params.get('replace')
 
     # Connect to OVH API
     client = ovh.Client()
@@ -131,54 +163,111 @@ def main():
         module.fail_json(msg='Domain {} does not exist'.format(domain))
 
     # Obtain all domain records to check status against what is demanded
-    records = get_domain_records(client, domain)
+    records = get_domain_records(client, domain, fieldtype, name)
 
-    # Remove a record
+    # Remove a record(s)
     if state == 'absent':
-        # Are we done yet?
-        #if name not in records or records[name]['fieldType'] != fieldtype or records[name]['target'] != targetval:
-        if name not in records:
+        if not records:
             module.exit_json(changed=False)
 
-        if not module.check_mode:
-            # Remove the record
-            # TODO: Must check parameters
-            client.delete('/domain/zone/{}/record/{}'.format(domain, records[name]['id']))
-            client.post('/domain/zone/{}/refresh'.format(domain))
-        module.exit_json(changed=True)
+        # Delete same tagert
+        if targetval:
+            tmprecords = records.copy()
+            for id in records:
+                if targetval.lower() != records[id]['target'].lower():
+                    tmprecords.pop(id)
+            records = tmprecords
+
+        results['records'] = records
+        if records:
+            if not module.check_mode:
+                # Remove the ALL record
+                for id in records.keys():
+                    client.delete('/domain/zone/{}/record/{}'.format(domain, id))
+                client.post('/domain/zone/{}/refresh'.format(domain))
+            results['changed'] = True
+        results['response'] = response
+        module.exit_json(**results)
 
     # Add / modify a record
-    if state == 'present':
-        fieldtype = module.params.get('type')
-        targetval = module.params.get('value')
+    elif state in ['present', 'append']:
 
         # Since we are inserting a record, we need a target
-        if targetval == '':
+        if targetval is None:
             module.fail_json(msg='Did not specify a value')
+        if fieldtype is None:
+            module.fail_json(msg='Did not specify a type')
 
-        # Does the record exist already?
-        if name in records:
-            if records[name]['fieldType'] == fieldtype and records[name]['target'] == targetval:
-                # The record is already as requested, no need to change anything
-                module.exit_json(changed=False)
+        # Does the record exist already? Yes
+        if records:
+            for id in records:
+                if records[id]['target'].lower() == targetval.lower():
+                    # The record is already as requested, no need to change anything
+                    module.exit_json(changed=False)
 
-            # Delete and re-create the record
+            # TODO: oldtargetval(replace) in regex
+            # list records modify in end
+            oldrecords = {}
+            if state == 'present':
+                for id in records:
+                    # update target
+                    if oldtargetval:
+                        if oldtargetval.lower() == records[id]['target'].lower():
+                            oldrecords.update({id: records[id]})
+                    # uniq update
+                    else:
+                        oldrecords.update({id: records[id]})
+                if oldtargetval and not oldrecords:
+                    module.fail_json(msg='Old record not match, use append ?')
+
+            # TODO: failed: old record not found if oldtargetval
+            if oldrecords:
+                if fieldtype in ['A', 'AAAA', 'CNAME'] and len(oldrecords) > 1 and not oldtargetval:
+                    module.fail_json(msg='Too many record match, use replace')
+
+                # FIXME: check if all records as same fieldType not A/AAAA and CNAME
+                # if fieldtype in ['A', 'AAAA', 'CNAME']:
+                #     oldA = count_type(records)
+                #     oldC = count_type(records, 'CNAME')
+                #     newA = count_type(oldrecords)
+                #     newC = count_type(oldrecords, 'CNAME')
+                #     check = True
+                #     if oldA > 0 and newC > 0 and oldA != newC:
+                #         check = False
+                #     if oldC > 0 and newA > 0 and oldC != newA:
+                #         check = False
+                #     if not check:
+                #         module.fail_json(msg='The subdomain already uses a DNS record.  You can not register a {} field because of an incompatibility.'.format(fieldType))
+
+                # Delete all records and re-create the record
+                if not module.check_mode:
+                    for id in oldrecords:
+                        client.delete('/domain/zone/{}/record/{}'.format(domain, id))
+                    response.append({'delete': oldrecords})
+
+                    res = client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval)
+                    response.append(res)
+                    # Refresh the zone and exit
+                    client.post('/domain/zone/{}/refresh'.format(domain))
+                results['changed'] = True
+        # end records exist
+
+        # Add record
+        if state == 'append' or not records:
             if not module.check_mode:
-                client.delete('/domain/zone/{}/record/{}'.format(domain, records[name]['id']))
-                client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval)
-
-                # Refresh the zone and exit
+                # Add the record
+                res = client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval)
+                response.append(res)
                 client.post('/domain/zone/{}/refresh'.format(domain))
-            module.exit_json(changed=True)
+            results['changed'] = True
 
-        if not module.check_mode:
-            # Add the record
-            client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval)
-            client.post('/domain/zone/{}/refresh'.format(domain))
-        module.exit_json(changed=True)
+        results['response'] = response
+        module.exit_json(**results)
+        # end state == 'present'
 
     # We should never reach here
-    module.fail_json(msg='Internal ovh_dns module error')
+    results['msg'] = 'Internal ovh_dns module error'
+    module.fail_json(**results)
 
 
 # import module snippets
