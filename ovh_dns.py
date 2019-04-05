@@ -217,8 +217,6 @@ def main():
                     # uniq update
                     else:
                         oldrecords.update({id: records[id]})
-                if oldtargetval and not oldrecords:
-                    module.fail_json(msg='Old record not match, use append ?')
 
             # TODO: failed: old record not found if oldtargetval
             if oldrecords:
