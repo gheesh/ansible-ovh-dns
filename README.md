@@ -54,6 +54,10 @@ Replace a typical A record if as multi record found with different target/value:
 
     - ovh_dns: state=present domain=mydomain.com name=db1 value=10.20.20.20 replace=10.10.10.10
 
+Replace a typical A record if as multi record found with different target/value and create if not found:
+
+    - ovh_dns: state=present domain=mydomain.com name=db1 value=10.20.20.20 replace=10.10.10.[0-9]* create=true
+
 Create a CNAME record:
 
     - ovh_dns: state=present domain=mydomain.com name=dbprod type=cname value=db1
@@ -84,3 +88,4 @@ value     | no       |         |                       | Value of the DNS record
 type      | no       |         | See comments          | Type of DNS record (A, AAAA, CAA, CNAME, DKIM, LOC, MX, NAPTR, NS, PTR, SPF, SRV, SSHFP, TLSA, TXT)
 state     | no       | present | present,absent,append | Determines wether the record is to be created/modified or deleted
 replace   | no       |         |                       | Old value of the DNS record (i.e. what it points to now)
+create    | no       |         | true,false            | Used with replace for forced creation
