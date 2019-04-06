@@ -29,6 +29,10 @@ description:
     - Manage OVH (French European hosting provider) DNS records
 requirements: [ "ovh" ]
 options:
+    create:
+        required: false
+        description:
+            - If 'state' == 'present' and 'replace' is not empty then create the record
     domain:
         required: true
         description:
@@ -45,6 +49,7 @@ options:
     replace:
         required: true if present and multi records found
             - Old value of the DNS record (i.e. what it points to now)
+            - Accept regex
     type:
         required: true if present/append
         choices: ['A', 'AAAA', 'CAA', 'CNAME', 'DKIM', 'LOC', 'MX', 'NAPTR', 'NS', 'PTR', 'SPF', 'SRV', 'SSHFP', 'TLSA', 'TXT']
@@ -71,6 +76,7 @@ EXAMPLES = '''
 
 import os
 import sys
+import re
 
 try:
     import ovh
@@ -134,6 +140,7 @@ def main():
             type = dict(default=None, choices=['A', 'AAAA', 'CNAME', 'CAA', 'DKIM', 'LOC', 'MX', 'NAPTR', 'NS', 'PTR', 'SPF', 'SRV', 'SSHFP', 'TXT', 'TLSA']),
             replace = dict(default=None),
             value = dict(default=None),
+            create = dict(default=False, type='bool'),
         ),
         supports_check_mode = True
     )
@@ -153,6 +160,7 @@ def main():
     fieldtype = module.params.get('type')
     targetval = module.params.get('value')
     oldtargetval = module.params.get('replace')
+    create = module.params.get('create')
 
     # Connect to OVH API
     client = ovh.Client()
@@ -205,24 +213,22 @@ def main():
                     # The record is already as requested, no need to change anything
                     module.exit_json(changed=False)
 
-            # TODO: oldtargetval(replace) in regex
             # list records modify in end
             oldrecords = {}
             if state == 'present':
                 for id in records:
                     # update target
                     if oldtargetval:
-                        if oldtargetval.lower() == records[id]['target'].lower():
+                        r = re.compile(oldtargetval, re.IGNORECASE)
+                        if re.match(r, records[id]['target']):
                             oldrecords.update({id: records[id]})
                     # uniq update
                     else:
                         oldrecords.update({id: records[id]})
+                if oldtargetval and not oldrecords and not create:
+                    module.fail_json(msg='Old record not match, use append ?')
 
-            # TODO: failed: old record not found if oldtargetval
             if oldrecords:
-                if fieldtype in ['A', 'AAAA', 'CNAME'] and len(oldrecords) > 1 and not oldtargetval:
-                    module.fail_json(msg='Too many record match, use replace')
-
                 # FIXME: check if all records as same fieldType not A/AAAA and CNAME
                 # if fieldtype in ['A', 'AAAA', 'CNAME']:
                 #     oldA = count_type(records)
@@ -247,7 +253,9 @@ def main():
                     response.append(res)
                     # Refresh the zone and exit
                     client.post('/domain/zone/{}/refresh'.format(domain))
+                    results['response'] = response
                 results['changed'] = True
+                module.exit_json(**results)
         # end records exist
 
         # Add record
