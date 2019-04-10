@@ -216,10 +216,11 @@ def main():
             # list records modify in end
             oldrecords = {}
             if state == 'present':
+                if oldtargetval:
+                    r = re.compile(oldtargetval, re.IGNORECASE)
                 for id in records:
                     # update target
                     if oldtargetval:
-                        r = re.compile(oldtargetval, re.IGNORECASE)
                         if re.match(r, records[id]['target']):
                             oldrecords.update({id: records[id]})
                     # uniq update
