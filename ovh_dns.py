@@ -181,20 +181,20 @@ def main():
         # Delete same tagert
         if targetval:
             tmprecords = records.copy()
+            r = re.compile(targetval, re.IGNORECASE)
             for id in records:
-                if targetval.lower() != records[id]['target'].lower():
+                if not re.match(r, records[id]['target']):
                     tmprecords.pop(id)
             records = tmprecords
 
-        results['records'] = records
+        results['delete'] = records
         if records:
             if not module.check_mode:
                 # Remove the ALL record
-                for id in records.keys():
+                for id in records:
                     client.delete('/domain/zone/{}/record/{}'.format(domain, id))
                 client.post('/domain/zone/{}/refresh'.format(domain))
             results['changed'] = True
-        results['response'] = response
         module.exit_json(**results)
 
     # Add / modify a record
