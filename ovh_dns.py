@@ -18,6 +18,8 @@
 # along with this program; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 
+# @see: https://github.com/gheesh/ansible-ovh-dns
+
 from __future__ import print_function
 
 DOCUMENTATION = '''
@@ -114,6 +116,7 @@ def main():
             value = dict(default=''),
             type = dict(default='A', choices=['A', 'AAAA', 'CNAME', 'DKIM', 'LOC', 'MX', 'NAPTR', 'NS', 'PTR', 'SPF', 'SRV', 'SSHFP', 'TXT']),
             state = dict(default='present', choices=['present', 'absent']),
+            ttl = dict(default='3600')
         ),
         supports_check_mode = True
     )
@@ -152,6 +155,7 @@ def main():
     if state == 'present':
         fieldtype = module.params.get('type')
         targetval = module.params.get('value')
+        ttlval = module.params.get('ttl')
 
         # Since we are inserting a record, we need a target
         if targetval == '':
@@ -166,7 +170,7 @@ def main():
             # Delete and re-create the record
             if not module.check_mode:
                 client.delete('/domain/zone/{}/record/{}'.format(domain, records[name]['id']))
-                client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval)
+                client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval, ttl=ttlval)
 
                 # Refresh the zone and exit
                 client.post('/domain/zone/{}/refresh'.format(domain))
@@ -174,7 +178,7 @@ def main():
 
         if not module.check_mode:
             # Add the record
-            client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval)
+            client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval, ttl=ttlval)
             client.post('/domain/zone/{}/refresh'.format(domain))
         module.exit_json(changed=True)
 
