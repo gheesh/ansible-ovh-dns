@@ -77,6 +77,11 @@ except ImportError:
     print("failed=True msg='ovh required for this module'")
     sys.exit(1)
 
+def normalize(type, subdomain, domain):
+    if subdomain:
+        return str(type) + " " + str(subdomain) + "." + domain
+    else:
+        return str(type) + " ." + domain
 
 # TODO: Try to automate this in case the supplied credentials are not valid
 def get_credentials():
@@ -93,7 +98,6 @@ def get_credentials():
     print("Your consumer key is {}".format(validation['consumerKey']))
     print("Please visit {} to validate".format(validation['validationUrl']))
 
-
 def get_domain_records(client, domain):
     """Obtain all records for a specific domain"""
     records = {}
@@ -102,8 +106,15 @@ def get_domain_records(client, domain):
     record_ids = client.get('/domain/zone/{}/record'.format(domain))
     for record_id in record_ids:
         info = client.get('/domain/zone/{}/record/{}'.format(domain, record_id))
-        # TODO: Cannot aggregate based only on name, must use record type and target as well
-        records[info['subDomain']] = info
+        recordname = normalize(info['fieldType'], info['subDomain'], domain)
+        if recordname in records:
+            old = records[recordname]
+            if isinstance(old, list):
+                records[recordname].append(info)
+            else: 
+                records[recordname] = [ old, info ]
+        else:
+            records[recordname] = info
 
     return records
 
@@ -112,19 +123,21 @@ def main():
     module = AnsibleModule(
         argument_spec = dict(
             domain = dict(required=True),
-            name = dict(required=True),
+            subdomain = dict(required=False),
             value = dict(default=''),
             type = dict(default='A', choices=['A', 'AAAA', 'CNAME', 'DKIM', 'LOC', 'MX', 'NAPTR', 'NS', 'PTR', 'SPF', 'SRV', 'SSHFP', 'TXT']),
             state = dict(default='present', choices=['present', 'absent']),
-            ttl = dict(default='3600')
+            ttl = dict(default='3600'),
+            permitduplicate = dict(default=False)
         ),
         supports_check_mode = True
     )
 
     # Get parameters
     domain = module.params.get('domain')
-    name   = module.params.get('name')
+    subdomain   = module.params.get('subdomain')
     state  = module.params.get('state')
+    fieldtype = module.params.get('type')
 
     # Connect to OVH API
     client = ovh.Client()
@@ -136,24 +149,24 @@ def main():
 
     # Obtain all domain records to check status against what is demanded
     records = get_domain_records(client, domain)
+    recordname = normalize(fieldtype, subdomain, domain)
 
     # Remove a record
     if state == 'absent':
         # Are we done yet?
         #if name not in records or records[name]['fieldType'] != fieldtype or records[name]['target'] != targetval:
-        if name not in records:
+        if recordname not in records:
             module.exit_json(changed=False)
 
         if not module.check_mode:
             # Remove the record
             # TODO: Must check parameters
-            client.delete('/domain/zone/{}/record/{}'.format(domain, records[name]['id']))
+            client.delete('/domain/zone/{}/record/{}'.format(domain, records[recordname]['id']))
             client.post('/domain/zone/{}/refresh'.format(domain))
         module.exit_json(changed=True)
 
     # Add / modify a record
     if state == 'present':
-        fieldtype = module.params.get('type')
         targetval = module.params.get('value')
         ttlval = module.params.get('ttl')
 
@@ -162,25 +175,46 @@ def main():
             module.fail_json(msg='Did not specify a value')
 
         # Does the record exist already?
-        if name in records:
-            if records[name]['fieldType'] == fieldtype and records[name]['target'] == targetval:
-                # The record is already as requested, no need to change anything
-                module.exit_json(changed=False)
+        if recordname in records:
+
+            if isinstance(records[recordname], list):
+                found = False
+                for recordid in records[recordname]:
+                    if recordid['target'] == targetval:
+                        found = True
+                if found:
+                    module.exit_json(changed=False)
+            else:
+                if records[recordname]['target'] == targetval:
+                    # The record is already as requested, no need to change anything
+                    module.exit_json(changed=False)
+
+            permitduplicate = module.params.get('permitduplicate')
 
             # Delete and re-create the record
             if not module.check_mode:
-                client.delete('/domain/zone/{}/record/{}'.format(domain, records[name]['id']))
-                client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval, ttl=ttlval)
+                if not permitduplicate:
+                    client.delete('/domain/zone/{}/record/{}'.format(domain, records[recordname]['id']))
+
+                if subdomain:
+                    client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=subdomain, target=targetval, ttl=ttlval)
+                else:
+                    client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, target=targetval, ttl=ttlval)
 
                 # Refresh the zone and exit
                 client.post('/domain/zone/{}/refresh'.format(domain))
+            
             module.exit_json(changed=True)
 
         if not module.check_mode:
             # Add the record
-            client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval, ttl=ttlval)
+            if subdomain:
+                client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=subdomain, target=targetval, ttl=ttlval)
+            else:
+                client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, target=targetval, ttl=ttlval)
             client.post('/domain/zone/{}/refresh'.format(domain))
-        module.exit_json(changed=True)
+            
+            module.exit_json(changed=True)
 
     # We should never reach here
     module.fail_json(msg='Internal ovh_dns module error')
