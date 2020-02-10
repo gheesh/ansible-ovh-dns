@@ -214,7 +214,6 @@ def main():
 
         tmprecords = records.copy()
         for id in records:
-            print("name: {} - target: {}".format(records[id]['subDomain'], records[id]['target']), file=fh)
             if not rn.match(records[id]['subDomain']) or not rv.match(records[id]['target']):
                 tmprecords.pop(id)
         records = tmprecords
