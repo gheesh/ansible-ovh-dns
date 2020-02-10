@@ -29,19 +29,33 @@ You'll need a valid OVH application key to use this module. If you don't have on
     client.request_consumerkey(access_rules)
     ```
 4. The reply to the last command is:
-
-    {u'consumerKey': u'GENERATED_CONSUMER_KEY',
-    u'state': u'pendingValidation',
-    u'validationUrl': u'https://eu.api.ovh.com/auth/?credentialToken=XXXXXXXX'}
-
+    ```python
+    {
+        u'consumerKey': u'GENERATED_CONSUMER_KEY',
+        u'state': u'pendingValidation',
+        u'validationUrl': u'https://eu.api.ovh.com/auth/?credentialToken=XXXXXXXX'
+    }
+    ```
 5. After visiting the validationUrl, the GENERATED_CONSUMER_KEY will be valid.
 5. Setup your shell so it exports the following values:
 
-    ```
+    ```sh
     OVH_ENDPOINT=ovh-eu
     OVH_APPLICATION_KEY=YOUR_APPLICATION_KEY
     OVH_APPLICATION_SECRET=YOUR_APPLICATION_SECRET
     OVH_CONSUMER_KEY=GENERATED_CONSUMER_KEY
+    ```
+
+    Environment variables can also be passed through Ansible task/playbook:
+
+    ```yaml
+    - name: OVH DNS playbook
+      hosts: localhost
+      environment:
+        OVH_ENDPOINT: ovh-eu
+        OVH_APPLICATION_KEY: YOUR_APPLICATION_KEY
+        OVH_APPLICATION_SECRET: YOUR_APPLICATION_SECRET
+        OVH_CONSUMER_KEY: GENERATED_CONSUMER_KEY
     ```
 
 ## Usage
@@ -78,6 +92,11 @@ Delete an existing record, all record same name:
 
     - ovh_dns: state=absent domain=mydomain.com name=dbprod
 
+Delete all TXT records matching ``'^_acme-challenge.*$'`` regex
+
+    - ovh_dns: state=absent domain=mydomain.com name='' type=TXT removes='^_acme-challenge.*'
+
+
 # Parameters
 
 Parameter | Required | Default | Choices               | Comments
@@ -85,7 +104,9 @@ Parameter | Required | Default | Choices               | Comments
 domain    | yes      |         |                       | Name of the domain zone
 name      | yes      |         |                       | Name of the DNS record
 value     | no       |         |                       | Value of the DNS record (i.e. what it points to)
+ttl       | no       | 3600    | integer value         | DNS record TTL value in seconds (defaults to 3600)
 type      | no       |         | See comments          | Type of DNS record (A, AAAA, CAA, CNAME, DKIM, LOC, MX, NAPTR, NS, PTR, SPF, SRV, SSHFP, TLSA, TXT)
 state     | no       | present | present,absent,append | Determines wether the record is to be created/modified or deleted
+removes   | no       |         | regex pattern         | specifies a regex pattern to match for bulk deletion
 replace   | no       |         |                       | Old value of the DNS record (i.e. what it points to now)
 create    | no       |         | true,false            | Used with replace for forced creation
