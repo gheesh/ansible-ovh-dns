@@ -46,10 +46,18 @@ options:
         description:
             - Value of the DNS record (i.e. what it points to)
             - If None with 'present' then deletes ALL records at 'name'
+    removes:
+        required: false
+        description:
+            - specifies a regex pattern to match for bulk deletion
     replace:
         required: true if present and multi records found
             - Old value of the DNS record (i.e. what it points to now)
             - Accept regex
+    ttl:
+        required: false
+        description:
+            - value of record TTL value in seconds (defaults to 3600) 
     type:
         required: true if present/append
         choices: ['A', 'AAAA', 'CAA', 'CNAME', 'DKIM', 'LOC', 'MX', 'NAPTR', 'NS', 'PTR', 'SPF', 'SRV', 'SSHFP', 'TLSA', 'TXT']
@@ -72,9 +80,12 @@ EXAMPLES = '''
 
 # Delete an existing record, must specify all parameters
 - ovh_dns: state=absent domain=mydomain.com name=dbprod type=cname value=db1
+
+# Delete all TXT records matching '^_acme-challenge.*$' regex
+- ovh_dns: state=absent domain=mydomain.com name='' type=TXT removes='^_acme-challenge.*'
 '''
 
-import os
+
 import sys
 import re
 
@@ -101,6 +112,7 @@ def get_credentials():
     # print("Please visit {} to validate".format(validation['validationUrl']))
     return validation['consumerKey']
 
+
 def get_domain_records(client, domain, fieldtype=None, subDomain=None):
     """Obtain all records for a specific domain"""
     records = {}
@@ -124,6 +136,7 @@ def get_domain_records(client, domain, fieldtype=None, subDomain=None):
 
     return records
 
+
 def count_type(records, fieldtype=['A', 'AAAA']):
     i = 0
     for id in records:
@@ -131,18 +144,21 @@ def count_type(records, fieldtype=['A', 'AAAA']):
             i+=1
     return i
 
+
 def main():
     module = AnsibleModule(
-        argument_spec = dict(
-            domain = dict(required=True),
-            name = dict(required=True),
-            state = dict(default='present', choices=['present', 'absent', 'append']),
-            type = dict(default=None, choices=['A', 'AAAA', 'CNAME', 'CAA', 'DKIM', 'LOC', 'MX', 'NAPTR', 'NS', 'PTR', 'SPF', 'SRV', 'SSHFP', 'TXT', 'TLSA']),
-            replace = dict(default=None),
-            value = dict(default=None),
-            create = dict(default=False, type='bool'),
+        argument_spec=dict(
+            domain=dict(required=True),
+            name=dict(required=True),
+            state=dict(default='present', choices=['present', 'absent', 'append']),
+            type=dict(default=None, choices=['A', 'AAAA', 'CNAME', 'CAA', 'DKIM', 'LOC', 'MX', 'NAPTR', 'NS', 'PTR', 'SPF', 'SRV', 'SSHFP', 'TXT', 'TLSA']),
+            removes=dict(default=None),
+            replace=dict(default=None),
+            value=dict(default=None),
+            create=dict(default=False, type='bool'),
+            ttl=dict(default=3600, type='int'),
         ),
-        supports_check_mode = True
+        supports_check_mode=True
     )
     results = dict(
         changed=False,
@@ -155,10 +171,12 @@ def main():
 
     # Get parameters
     domain = module.params.get('domain')
-    name   = module.params.get('name')
-    state  = module.params.get('state')
+    name = module.params.get('name')
+    state = module.params.get('state')
     fieldtype = module.params.get('type')
     targetval = module.params.get('value')
+    removes = module.params.get('removes')
+    ttlval = module.params.get('ttl')
     oldtargetval = module.params.get('replace')
     create = module.params.get('create')
 
@@ -167,7 +185,7 @@ def main():
 
     # Check that the domain exists
     domains = client.get('/domain/zone')
-    if not domain in domains:
+    if domain not in domains:
         module.fail_json(msg='Domain {} does not exist'.format(domain))
 
     # Obtain all domain records to check status against what is demanded
@@ -175,17 +193,30 @@ def main():
 
     # Remove a record(s)
     if state == 'absent':
+
+        if len(name) == 0 and not removes:
+            module.fail_json(msg='wildcard delete not allowed')
+
         if not records:
             module.exit_json(changed=False)
 
-        # Delete same tagert
+        # Delete same target
+        rn = None
+        rv = None
+        if removes:
+            rn = re.compile(removes, re.IGNORECASE)
+        else:
+            rn = re.compile("^{}$".format(name), re.IGNORECASE)
         if targetval:
-            tmprecords = records.copy()
-            r = re.compile(targetval, re.IGNORECASE)
-            for id in records:
-                if not re.match(r, records[id]['target']):
-                    tmprecords.pop(id)
-            records = tmprecords
+            rv = re.compile(targetval, re.IGNORECASE)
+        else:
+            rv = re.compile(r'.*')
+
+        tmprecords = records.copy()
+        for id in records:
+            if not rn.match(records[id]['subDomain']) or not rv.match(records[id]['target']):
+                tmprecords.pop(id)
+        records = tmprecords
 
         results['delete'] = records
         if records:
@@ -209,7 +240,7 @@ def main():
         # Does the record exist already? Yes
         if records:
             for id in records:
-                if records[id]['target'].lower() == targetval.lower():
+                if records[id]['target'].lower() == targetval.lower() and records[id]['ttl'] == ttlval:
                     # The record is already as requested, no need to change anything
                     module.exit_json(changed=False)
 
@@ -250,7 +281,7 @@ def main():
                         client.delete('/domain/zone/{}/record/{}'.format(domain, id))
                     response.append({'delete': oldrecords})
 
-                    res = client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval)
+                    res = client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval, ttl=ttlval)
                     response.append(res)
                     # Refresh the zone and exit
                     client.post('/domain/zone/{}/refresh'.format(domain))
@@ -263,7 +294,7 @@ def main():
         if state == 'append' or not records:
             if not module.check_mode:
                 # Add the record
-                res = client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval)
+                res = client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval, ttl=ttlval)
                 response.append(res)
                 client.post('/domain/zone/{}/refresh'.format(domain))
             results['changed'] = True
