@@ -123,7 +123,7 @@ def get_domain_records(client, domain, fieldtype=None, subDomain=None):
     }
 
     # List all ids and then get info for each one
-    if not subDomain:
+    if subDomain == None:
         params.pop('subDomain')
     if not fieldtype:
         params.pop('fieldType')
