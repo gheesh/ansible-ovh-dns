@@ -118,16 +118,13 @@ def get_domain_records(client, domain, fieldtype=None, subDomain=None):
     """Obtain all records for a specific domain"""
     records = {}
 
-    params = {
-        'subDomain': subDomain,
-        'fieldType': fieldtype,
-    }
+    params = {}
 
     # List all ids and then get info for each one
-    if subDomain == None:
-        params.pop('subDomain')
-    if not fieldtype:
-        params.pop('fieldType')
+    if subDomain is not None:
+        params['subDomain'] = subDomain
+    if fieldtype is not None:
+        params['fieldType'] = fieldtype
 
     record_ids = client.get('/domain/zone/{}/record'.format(domain),
                             **params)
