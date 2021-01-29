@@ -88,6 +88,7 @@ EXAMPLES = '''
 
 import sys
 import re
+import yaml
 
 try:
     import ovh
@@ -163,6 +164,7 @@ def main():
         records='',
         response='',
         original_message=module.params['name'],
+        diff={}
     )
     response = []
 
@@ -217,12 +219,23 @@ def main():
 
         results['delete'] = records
         if records:
-            if not module.check_mode:
-                # Remove the ALL record
-                for id in records:
+            before_records=[]
+            # Remove the ALL record
+            for id in records:
+                before_records.append(dict(
+                    domain=domain,
+                    fieldType=records[id]['fieldType'],
+                    subDomain=records[id]['subDomain'],
+                    target=records[id]['target'],
+                    ttl=records[id]['ttl'],
+                    ))
+                if not module.check_mode:
                     client.delete('/domain/zone/{}/record/{}'.format(domain, id))
+            if not module.check_mode:
                 client.post('/domain/zone/{}/refresh'.format(domain))
             results['changed'] = True
+            results['diff']['before'] = yaml.dump(before_records)
+            results['diff']['after'] = ''
         module.exit_json(**results)
 
     # Add / modify a record
@@ -258,6 +271,7 @@ def main():
                     module.fail_json(msg='Old record not match, use append ?')
 
             if oldrecords:
+                before_records = []
                 # FIXME: check if all records as same fieldType not A/AAAA and CNAME
                 # if fieldtype in ['A', 'AAAA', 'CNAME']:
                 #     oldA = count_type(records)
@@ -273,27 +287,55 @@ def main():
                 #         module.fail_json(msg='The subdomain already uses a DNS record.  You can not register a {} field because of an incompatibility.'.format(fieldType))
 
                 # Delete all records and re-create the record
-                if not module.check_mode:
-                    for id in oldrecords:
+                newrecord = dict(
+                        fieldType=fieldtype,
+                        subDomain=name,
+                        target=targetval,
+                        ttl=ttlval
+                        )
+                for id in oldrecords:
+                    before_records.append(dict(
+                        domain=domain,
+                        fieldType=oldrecords[id]['fieldType'],
+                        subDomain=oldrecords[id]['subDomain'],
+                        target=oldrecords[id]['target'],
+                        ttl=oldrecords[id]['ttl'],
+                        ))
+                    if not module.check_mode:
                         client.delete('/domain/zone/{}/record/{}'.format(domain, id))
+                if not module.check_mode:
                     response.append({'delete': oldrecords})
 
-                    res = client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval, ttl=ttlval)
+                    res = client.post('/domain/zone/{}/record'.format(domain), **newrecord)
                     response.append(res)
                     # Refresh the zone and exit
                     client.post('/domain/zone/{}/refresh'.format(domain))
                     results['response'] = response
+                results['diff']['before'] = yaml.dump(before_records)
+                after = [newrecord]
+                after[0]['domain'] = domain
+                results['diff']['after'] = yaml.dump(after)
                 results['changed'] = True
                 module.exit_json(**results)
         # end records exist
 
         # Add record
         if state == 'append' or not records:
+            newrecord = dict(
+                    fieldType=fieldtype,
+                    subDomain=name,
+                    target=targetval,
+                    ttl=ttlval
+                    )
             if not module.check_mode:
                 # Add the record
-                res = client.post('/domain/zone/{}/record'.format(domain), fieldType=fieldtype, subDomain=name, target=targetval, ttl=ttlval)
+                res = client.post('/domain/zone/{}/record'.format(domain), **newrecord)
                 response.append(res)
                 client.post('/domain/zone/{}/refresh'.format(domain))
+            results['diff']['before'] = ''
+            after = dict(newrecord)
+            after['domain'] = domain
+            results['diff']['after'] = yaml.dump(after)
             results['changed'] = True
 
         results['response'] = response
