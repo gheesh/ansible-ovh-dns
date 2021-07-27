@@ -119,8 +119,6 @@ def update_reverse(check_mode, client, ip, original_reverse, reverse, results):
     if original_reverse is None or original_reverse['reverse'] != reverse:
         if original_reverse:
             results['diff']['before'] = original_reverse['reverse'] + "\n"
-            if not check_mode:
-                client.delete('/ip/{}%2F32/reverse/{}'.format(ip, original_reverse['ipReverse']))
         updated_reverse = None
         results['diff']['before'] = original_reverse['reverse'] + "\n" if original_reverse else "\n"
         if not check_mode:
