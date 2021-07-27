@@ -103,6 +103,16 @@ def get_reverse(client, ip):
         # result is a list; only one reverse is expected
         return client.get('/ip/{}%2F32/reverse/{}'.format(ip, ip_reverses[0]))
 
+def exc_str(ovh_exception):
+    """__str__ is overloaded in ovh APIError and does not provide any insight.
+    Alternative implementation to retrieve first exception parameter.
+    """
+    args = getattr(ovh_exception, 'args', None)
+    if args:
+        return args[0]
+    else:
+        return str(ovh_exception)
+
 
 def update_reverse(check_mode, client, ip, original_reverse, reverse, results):
     """Update a reverse"""
@@ -162,39 +172,43 @@ def main():
         results['original_reverse'] = original_reverse
         results['reverse'] = original_reverse
     except Exception as e:
-        module.fail_json(msg='IP reverse for {} does not seem to be manageable: {}.'.format(ip, str(e)))
+        module.fail_json(msg='IP reverse for {} does not seem to be manageable: {}.'.format(ip, exc_str(e)))
 
-    if state == 'present':
-        if reverse:
-            # we have a value to check and set
-            update_reverse(module.check_mode, client, ip, original_reverse, reverse, results)
-        else:
-            # we only check if reverse is set (whatever value it is)
-            if original_reverse is None:
-                # no reverse to set and no reverse, failure
-                results['msg'] = 'No IP reverse for {} and not reverse provided. Failure.'.format(ip)
-                results['failed'] = True
+    try:
+        if state == 'present':
+            if reverse:
+                # we have a value to check and set
+                update_reverse(module.check_mode, client, ip, original_reverse, reverse, results)
             else:
-                results['msg'] = 'IP reverse record for {} is set to {}.'.format(ip, original_reverse['reverse'])
-    elif state == 'absent' and original_reverse is None:
-        results['msg'] = 'IP reverse record for {} is absent.'.format(ip)
-    elif state == 'absent' and not original_reverse is None:
-        if not module.check_mode:
-            client.delete('/ip/{}%2F32/reverse/{}'.format(ip, original_reverse['ipReverse']))
-            results['msg'] = 'IP reverse record for {} deleted.'.format(ip)
-        else:
-            results['msg'] = 'IP reverse record for {} needs to be deleted.'.format(ip)
-        results['diff']['before'] = original_reverse['reverse'] + "\n"
-        results['diff']['after'] = "\n"
-        results['changed'] = True
-        results['reverse'] = None
+                # we only check if reverse is set (whatever value it is)
+                if original_reverse is None:
+                    # no reverse to set and no reverse, failure
+                    results['msg'] = 'No IP reverse for {} and not reverse provided. Failure.'.format(ip)
+                    results['failed'] = True
+                else:
+                    results['msg'] = 'IP reverse record for {} is set to {}.'.format(ip, original_reverse['reverse'])
+        elif state == 'absent' and original_reverse is None:
+            results['msg'] = 'IP reverse record for {} is absent.'.format(ip)
+        elif state == 'absent' and not original_reverse is None:
+            if not module.check_mode:
+                client.delete('/ip/{}%2F32/reverse/{}'.format(ip, original_reverse['ipReverse']))
+                results['msg'] = 'IP reverse record for {} deleted.'.format(ip)
+            else:
+                results['msg'] = 'IP reverse record for {} needs to be deleted.'.format(ip)
+            results['diff']['before'] = original_reverse['reverse'] + "\n"
+            results['diff']['after'] = "\n"
+            results['changed'] = True
+            results['reverse'] = None
 
-    failed = results['failed']
-    results.pop('failed')
-    if failed:
-        module.fail_json(**results)
-    else:
-        module.exit_json(**results)
+        failed = results['failed']
+        results.pop('failed')
+        if failed:
+            module.fail_json(**results)
+        else:
+            module.exit_json(**results)
+    except Exception as e:
+        module.fail_json(msg='IP reverse for {} fails during update: {}.'.format(ip, exc_str(e)))
+
 
 
 # import module snippets
