@@ -108,21 +108,21 @@ def update_reverse(check_mode, client, ip, original_reverse, reverse, results):
     """Update a reverse"""
     if original_reverse is None or original_reverse['reverse'] != reverse:
         if original_reverse:
-            results['diff']['before'] = original_reverse['reverse']
+            results['diff']['before'] = original_reverse['reverse'] + "\n"
             if not check_mode:
                 client.delete('/ip/{}%2F32/reverse/{}'.format(ip, original_reverse['ipReverse']))
         updated_reverse = None
-        results['diff']['before'] = original_reverse['reverse'] if original_reverse else ''
+        results['diff']['before'] = original_reverse['reverse'] + "\n" if original_reverse else "\n"
         if not check_mode:
             client.post('/ip/{}%2F32/reverse'.format(ip), ipReverse=ip, reverse=reverse)
             updated_reverse = get_reverse(client, ip)
             results['reverse'] = updated_reverse
             results['msg'] = 'IP reverse for {} updated from {} to {}'.format(ip, original_reverse['reverse'] if original_reverse else '<none>', updated_reverse['reverse'])
-            results['diff']['after'] = updated_reverse['reverse']
+            results['diff']['after'] = updated_reverse['reverse'] + "\n"
         else:
             results['reverse'] = None
             results['msg'] = 'IP reverse for {} needs to be updated from {} to {}'.format(ip, original_reverse['reverse'] if original_reverse else '<none>', reverse)
-            results['diff']['after'] = reverse
+            results['diff']['after'] = reverse + "\n"
         results['changed'] = True
     else:
         results['msg'] = 'IP reverse for {} already set to {}'.format(ip, reverse)
@@ -184,8 +184,8 @@ def main():
             results['msg'] = 'IP reverse record for {} deleted.'.format(ip)
         else:
             results['msg'] = 'IP reverse record for {} needs to be deleted.'.format(ip)
-        results['diff']['before'] = original_reverse['reverse']
-        results['diff']['after'] = ''
+        results['diff']['before'] = original_reverse['reverse'] + "\n"
+        results['diff']['after'] = "\n"
         results['changed'] = True
         results['reverse'] = None
 
