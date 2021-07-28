@@ -62,15 +62,15 @@ You'll need a valid OVH application key to use this module. If you don't have on
 
 Create a typical A record:
 
-    - ovh_dns: state=present domain=mydomain.com name=db1 value=10.10.10.10
+    - ovh_dns: state=present domain=mydomain.com name=db1 type=A value=10.10.10.10
 
 Replace a typical A record if as multi record found with different target/value:
 
-    - ovh_dns: state=present domain=mydomain.com name=db1 value=10.20.20.20 replace=10.10.10.10
+    - ovh_dns: state=present domain=mydomain.com name=db1 type=A value=10.20.20.20 replace=10.10.10.10
 
 Replace a typical A record if as multi record found with different target/value and create if not found:
 
-    - ovh_dns: state=present domain=mydomain.com name=db1 value=10.20.20.20 replace=10.10.10.[0-9]* create=true
+    - ovh_dns: state=present domain=mydomain.com name=db1 type=A value=10.20.20.20 replace=10.10.10.[0-9]* create=true
 
 Create a CNAME record:
 
@@ -96,6 +96,19 @@ Delete all TXT records matching ``'^_acme-challenge.*$'`` regex
 
     - ovh_dns: state=absent domain=mydomain.com name='' type=TXT removes='^_acme-challenge.*'
 
+Module supports ``--diff`` switch; it displays a YAML diff between removed and added records:
+
+```yaml
+  - ovh_dns: state=present domain=mydomain.com name=db1 type=A value=10.20.20.20 replace=10.10.10.10
+```
+```diff
+ - domain: kobalt.fr
+   fieldType: A
+   subDomain: db1
+-  target: 10.10.10.10
++  target: 10.20.20.20
+   ttl: 3600
+```
 
 # Parameters
 
