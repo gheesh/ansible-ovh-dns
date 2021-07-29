@@ -1,6 +1,9 @@
 # ansible-ovh-dns
 
-Ansible module for automating DNS entry creation/deletion using the [OVH API](https://eu.api.ovh.com/).
+Ansible module for automating DNS entry creation/deletion using the [OVH API](https://eu.api.ovh.com/) and
+reverse management.
+
+Two modules are provided : `ovh_dns` (record management) and `ovh_reverse` (reverse management).
 
 ## Installation
 
@@ -16,7 +19,8 @@ You'll need a valid OVH application key to use this module. If you don't have on
 
 1. Visit [https://eu.api.ovh.com/createApp/](https://eu.api.ovh.com/createApp/) and fill all fields.
 2. You'll obtain an Application Key and an Application Secret.
-3. Launch python or ipython in a terminal:
+3. Launch python or ipython in a terminal (`/domain/` endpoints are for `ovh_dns` module, `/ip/` for
+   `ovh_reverse`):
 
     ```python
     client = ovh.Client('ovh-eu', 'YOUR_APPLICATION_KEY', 'YOUR_APPLICATION_SECRET')
@@ -24,7 +28,10 @@ You'll need a valid OVH application key to use this module. If you don't have on
       {'method': 'GET', 'path': '/domain/*'},
       {'method': 'POST', 'path': '/domain/*'},
       {'method': 'PUT', 'path': '/domain/*'},
-      {'method': 'DELETE', 'path': '/domain/*'}
+      {'method': 'DELETE', 'path': '/domain/*'},
+      {'method': 'GET', 'path': '/ip/*'},
+      {'method': 'POST', 'path': '/ip/*'},
+      {'method': 'DELETE', 'path': '/ip/*'}
     ]
     client.request_consumerkey(access_rules)
     ```
@@ -96,6 +103,18 @@ Delete all TXT records matching ``'^_acme-challenge.*$'`` regex
 
     - ovh_dns: state=absent domain=mydomain.com name='' type=TXT removes='^_acme-challenge.*'
 
+Create a reverse
+
+    - ovh_reverse: ip=10.10.10.10 state=present reverse=myhost.mydomain.tld.
+
+Check a reverse exists, else triggers a failure
+
+    - ovh_reverse: ip=10.10.10.10 state=present
+
+Delete a reverse
+
+    - ovh_reverse: ip=10.10.10.10 state=absent
+
 Module supports ``--diff`` switch; it displays a YAML diff between removed and added records:
 
 ```yaml
@@ -112,6 +131,8 @@ Module supports ``--diff`` switch; it displays a YAML diff between removed and a
 
 # Parameters
 
+## ovh\_dns
+
 Parameter | Required | Default | Choices               | Comments
 :---------|----------|---------|-----------------------|:-----------------------
 domain    | yes      |         |                       | Name of the domain zone
@@ -123,3 +144,12 @@ state     | no       | present | present,absent,append | Determines wether the r
 removes   | no       |         | regex pattern         | specifies a regex pattern to match for bulk deletion
 replace   | no       |         |                       | Old value of the DNS record (i.e. what it points to now)
 create    | no       |         | true,false            | Used with replace for forced creation
+
+
+## ovh\_reverse
+
+Parameter | Required | Default | Choices               | Comments
+:---------|----------|---------|-----------------------|:-----------------------
+ip        | yes      |         |                       | IP (NNN.NNN.NNN.NNN) we want to check the associated reverse
+state     | no       | present | present, absent       | present with empty reverse to only check a reverse record exists, present with a reverse to check existence and value, absent to check no reverse exists
+reverse   | no       |         |                       | Expected reverse. Not used if state=absent. If state=present and reverse empty or not set, module only checks reverse existence (whatever value is set). **OVH API checks that provided reverse resolves to the appropriate IP.**
