@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 # ovh_dns, an Ansible module for managing OVH DNS records
