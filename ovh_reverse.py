@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 # ovh_reverse, an Ansible module for managing OVH DNS reverse
